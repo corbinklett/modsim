@@ -3,7 +3,9 @@ from scipy.integrate import odeint
 
 class Subsystem:
     def __init__(self, parameters={}):
-        self.dim = 0
+        self.dim_states = 0
+        self.dim_inputs = 0
+        self.dim_outputs = 0
         self.states = np.array([])
         self.inputs = np.array([])
         self.outputs = np.array([])
@@ -15,11 +17,31 @@ class Subsystem:
     def dynamics(self, time):
         pass
 
+class LinearSystem(Subsystem):
+        def __init__(self, A, B, C, D=None):
+            super().__init__()
+            self.A = A
+            self.B = B
+            self.C = C
+            if D is None:
+                self.D = np.zeros((C.shape[0], B.shape[1]))
+            self.parameters = {'A': A, 'B': B, 'C': C, 'D': D}
+            self.dim_states = A.shape[0]
+            self.dim_inputs = B.shape[1]
+            self.dim_outputs = C.shape[0]
+            
+        def update_outputs(self):
+            outputs = self.C @ self.states + self.D @ self.inputs
+            self.outputs = outputs
+    
+        def dynamics(self, time):
+            return self.A @ self.states + self.B @ self.inputs
+
 class Plant(Subsystem):
 
     def __init__(self):
         super().__init__()
-        self.dim = 1
+        self.dim_states = 1
 
     def update_outputs(self):
         outputs = self.states
@@ -33,7 +55,9 @@ class Actuator(Subsystem):
 
     def __init__(self):
         super().__init__()
-        self.dim = 1
+        self.dim_states = 1
+        self.dim_outputs = 1
+        self.dim_inputs = 1
 
     def update_outputs(self):
         outputs = self.states
@@ -65,9 +89,9 @@ class SimulationEngine:
         # unpack the state vector into the subsystems
         counter = 0
         for subsystem in self.subsystems:
-            if subsystem.dim > 0:
-                subsystem.states = states[counter]
-                counter += 1
+            if subsystem.dim_states > 0:
+                subsystem.states = states[counter : counter + subsystem.dim_states]
+                counter += subsystem.dim_states
         return states
 
     def compute_outputs(self):
@@ -99,3 +123,5 @@ class SimulationEngine:
         t = np.arange(t0, tf, dt)
         state_trajectories = odeint(self.dynamics, initial_states, t)
         return state_trajectories
+
+# left off - "direction of causality" for specifying output calcs that are a function of inputs

@@ -4,10 +4,11 @@ import matplotlib as plt
 
 # Example usage
 actuator = ms.Actuator()
-
 actuator.parameters = {'time constant': 1}
-plant = ms.LinearySubsystem()
-plant.parameters = {'a': -0.3, 'b': 2}
+A = np.array([[0, 1], [-.2, -1]])
+B = np.array([[0], [1]])
+C = np.array([[1, 0]])
+plant = ms.LinearSystem(A, B, C)
 step = ms.StepInput()
 
 sim = ms.SimulationEngine()
@@ -18,7 +19,7 @@ sim.add_subsystem(step)
 sim.connect(actuator, plant) # input -> output
 sim.connect(step, actuator) # input -> output
 
-x0 = np.array([0,0])
+x0 = np.array([0,0,0])
 res = sim.simulate(x0, (0, 10))
 
 # left off - plot it. Then generalize dimension and add labels
