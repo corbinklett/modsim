@@ -28,7 +28,7 @@ class SignalSet:
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            return self.signals[key]
+            return self, key
         elif isinstance(key, str):
             for signal in self.signals:
                 if signal.name == key:
@@ -37,6 +37,7 @@ class SignalSet:
             raise KeyError("Invalid key type")
 
     def names_units(self, names, units=None):
+        # TODO: add similar function to Subsystem like "name_outputs" and "name_inputs" such that you can't have an output named the same as an input
         if len(names) != len(self.signals):
             raise ValueError("Number of names must match the number of signals")
         if units is not None and len(units) != len(self.signals):
@@ -70,18 +71,20 @@ class Subsystem:
     # TODO: write a function that (optionally) names the states, inputs, and outputs and assigns units
     # def name_variables(self):
         
+    def __getitem__(self, key):
+        return self, key
+        
     def update_system(self, time):
         x = self.states.get_vector()
         u = self.inputs.get_vector()
 
         if len(x) == 0:
             # system is memoryless and output depends only on input
-            if self.inputs.count > self.outputs.count:
-                y = self.update_outputs(self, u, time)
-            else:
-                raise ValueError("Input has not been updated yet.")
+            y = self.update_outputs(self, u, time)
         else: 
             # pass the state into the output function
+            # TODO: allow outputs that are a function of state and feedthrough input 
+            # (or, rather, reconstruct system to seperate the feedforward component, assuming x & u are coupled)
             y = self.update_outputs(self, x, time)
         
         self.outputs.set_values(y)
@@ -96,19 +99,36 @@ class Subsystem:
 
 class SimulationEngine:
     def __init__(self):
-        self.subsystems = []
-        self.connections = []
+        self.subsystems = [] # list of Subystem objects
+        self.connections = [] # list of dictionaries
         self.count = 0
 
     def add_subsystem(self, subsystem):
         self.subsystems.append(subsystem)
 
-    def connect(self, exit_signal, entrance_signal):
-        self.connections.append((exit_signal, entrance_signal))
-        # get the owning subsystem and make a dictionary if the input dependencies
+    def connect(self, output_tuple, input_tuple):
+        # output signal -> input signal
+        #  self.connections is a list of subsystems and their connections
 
+        output_sys = output_tuple[0]
+        output_signal_name = output_tuple[1]
+        output_signal = output_sys.outputs[output_signal_name]
 
+        input_sys = input_tuple[0]
+        input_signal_name = input_tuple[1]
+        input_signal = input_sys.inputs[input_signal_name]
 
+        # check to see if subsystem already has connections
+        system_found = False
+        for connection in self.connections:
+            if connection['system'] == input_sys:
+                connection['connections'].append((output_signal, input_signal))
+                system_found = True
+                break
+        
+        if not system_found:
+            self.connections.append({'system': input_sys, 'connections': [(output_signal, input_signal)]})
+        
     def update_systems(self, time):
 
         subsystem_computed_list = []
@@ -117,7 +137,10 @@ class SimulationEngine:
 
         # will need to re-assign the incoming signal value when the count = the upstream output count
         for connection in self.connections:
-            connection[1].value = connection[0].value # right side does not have updated count
+            if connection[0].count == connection[1].count + 1:
+                connection[1].value = connection[0].value 
+            else:
+
 
             LEFT OFF - trying to manage connections, possibly sorting by subsystem
             # only do the single subsystem's connections, not all connections arbitrarily
@@ -129,6 +152,12 @@ class SimulationEngine:
 
         
         while len(self.subsystems) > 0:
+
+            HERE TOO
+            # if subsystem has no states, then see if all inputs have been updated appropriately
+            # look at all incoming connections in connections object and see if the count is < 1 to the output count
+            # if not, then the output will need to put somewhere and updated again?
+
             connections[self.subsystems[index]].update()
 
 

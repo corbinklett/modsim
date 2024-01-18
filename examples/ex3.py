@@ -17,7 +17,7 @@ sim.add_subsystem(plant)
 sim.add_subsystem(step)
 sim.add_subsystem(gain)
 
-gain.outputs.names_units("k", "V/m")
+gain.outputs.names_units("y", "V/m")
 actuator.inputs.names_units("u", "V")
 
 # draw individual lines between blocks
@@ -26,9 +26,9 @@ actuator.inputs.names_units("u", "V")
 # enforce that it only connects and output to an input
 # output -> input
 returns an object that contains both the subsystme and the signal
-sim.connect(gain.outputs["k"], actuator.inputs["u"])
-sim.connect(step.outputs[0], gain.inputs[0])
-sim.connect(actuator.outputs[0], plant.inputs[0])
+sim.connect(gain["y"], actuator["u"])
+sim.connect(step[0], gain[0])
+sim.connect(actuator[0], plant[0])
 # next - do a closed loop system, and try multiple inputs/outputs
 
 x0 = np.array([0,0,0])
