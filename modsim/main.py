@@ -74,24 +74,27 @@ class Subsystem:
     def __getitem__(self, key):
         return self, key
         
-    def update_system(self, time):
+    def update_outputs(self, time):
         x = self.states.get_vector()
         u = self.inputs.get_vector()
 
         if len(x) == 0:
             # system is memoryless and output depends only on input
-            y = self.update_outputs(self, u, time)
+            y = self.calc_outputs(self, u, time)
         else: 
             # pass the state into the output function
             # TODO: allow outputs that are a function of state and feedthrough input 
             # (or, rather, reconstruct system to seperate the feedforward component, assuming x & u are coupled)
-            y = self.update_outputs(self, x, time)
-        
+            y = self.calc_outputs(self, x, time)
+
         self.outputs.set_values(y)
-        xdot = self.dynamics(self, x, u, time)
-        return xdot
+
+    def update_dynamics(self, time):
+        x = self.states.get_vector()
+        u = self.inputs.get_vector()
+        return self.dynamics(self, x, u, time)
         
-    def update_outputs(self, state_or_input, time):
+    def calc_outputs(self, state_or_input, time):
         pass
 
     def dynamics(self, x, u, time):
@@ -99,12 +102,11 @@ class Subsystem:
 
 class SimulationEngine:
     def __init__(self):
-        self.subsystems = [] # list of Subystem objects
-        self.connections = [] # list of dictionaries
+        self.subsystem_list = [] # list of dictionaries 
         self.count = 0
 
     def add_subsystem(self, subsystem):
-        self.subsystems.append(subsystem)
+        self.subsystem_list.append({'subsystem': subsystem, 'connections': []})
 
     def connect(self, output_tuple, input_tuple):
         # output signal -> input signal
@@ -119,66 +121,30 @@ class SimulationEngine:
         input_signal = input_sys.inputs[input_signal_name]
 
         # check to see if subsystem already has connections
-        system_found = False
-        for connection in self.connections:
-            if connection['system'] == input_sys:
-                connection['connections'].append((output_signal, input_signal))
-                system_found = True
+        for item in self.subsystem_list:
+            # TODO: implement more efficient search through the list of dictionaries
+            if item['subsystem'] == input_sys:
+                item['connections'].append((output_signal, input_signal))
                 break
         
-        if not system_found:
-            self.connections.append({'system': input_sys, 'connections': [(output_signal, input_signal)]})
-        
     def update_systems(self, time):
-
-        subsystem_computed_list = []
-    
-        # it's going to have to find all the connectins that belong toa  subsystem
-
-        # will need to re-assign the incoming signal value when the count = the upstream output count
-        for connection in self.connections:
-            if connection[0].count == connection[1].count + 1:
-                connection[1].value = connection[0].value 
-            else:
-
-
-            LEFT OFF - trying to manage connections, possibly sorting by subsystem
-            # only do the single subsystem's connections, not all connections arbitrarily
-            # when looping through connections for a subsystem again, increment the count of each?
-            # but that could eff you up if one subsystem is connected to multiple other subsystems
         index = 0
-
-        IDEA - first compute subsystems that have no feedforward
-
         
-        while len(self.subsystems) > 0:
-
-            HERE TOO
-            # if subsystem has no states, then see if all inputs have been updated appropriately
-            # look at all incoming connections in connections object and see if the count is < 1 to the output count
-            # if not, then the output will need to put somewhere and updated again?
-
-            connections[self.subsystems[index]].update()
-
-
-            self.subsystems[index]
-            try:
-                xdot = self.subsystems[index].update_system(time)
-            except: 
-                index += 1 
-
-
-        index = 0 
-        while len(self.subsystems) > 0:
-
-            try:
-                self.subsystems[index].update_outputs()
-                subsystem_computed_list.append(self.subsystems[index])
-                self.subsystems.pop(index)
-                index = 0
-            except:
-                print("ERRORED!")
+        while index < len(self.subsystem_list):
+            item = self.subsystem_list[index]
+            if len(item['connections']) == 0 or len(item['subsystem'].states) != 0:
+                # first compute outputs of non-memoryless subsystems or subsystems with no inputs
+                self.update_outputs(item['subsystem'], time)
                 index += 1
+            else:
+                if item['connections'][0].count == item['connections'][1].count + 1:
+                    item['connections'][1].value = item['connections'][0].value
+                    index += 1
+                else:
+                    # Move the item at the current index to the end of the subsystem_list
+                    current_item = self.subsystem_list[index]
+                    self.subsystem_list.append(current_item)
+                    self.subsystem_list.pop(index)
                 
     def populate_states(self, states):
         # unpack the state vector into the subsystems

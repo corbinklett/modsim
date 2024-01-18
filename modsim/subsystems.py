@@ -10,7 +10,7 @@ class LinearSystem(Subsystem):
         super().__init__(A.shape[0], B.shape[1], C.shape[0], parameters)
         # optionally, name signals here
 
-    def update_outputs(self, x, time):
+    def calc_outputs(self, x, time):
         outputs = self.parameters['C'] @ x
         # TODO: allow feedthrough terms
         # if self.parameters['D'] is not None:
@@ -32,7 +32,7 @@ class Actuator(Subsystem):
         parameters = {'time constant': time_constant}
         super().__init__(1, 1, 1, parameters)
 
-    def update_outputs(self, x, time):
+    def calc_outputs(self, x, time):
         return x
 
     def dynamics(self, x, u, time):
@@ -43,7 +43,7 @@ class StepInput(Subsystem):
     def __init__(self):
         super().__init__(0, 0, 1)
 
-    def update_outputs(self, u, time):
+    def calc_outputs(self, u, time):
         return 1.0
 
     def dynamics(self, x, u, time):
@@ -54,7 +54,7 @@ class Gain(Subsystem):
         parameters = {'k': k}
         super().__init__(0, 1, 1, parameters)
 
-    def update_outputs(self, u, time):
+    def calc_outputs(self, u, time):
         return self.parameters['k'] * u
 
     def dynamics(self, x, u, time):
