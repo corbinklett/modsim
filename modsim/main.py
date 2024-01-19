@@ -24,20 +24,33 @@ class Signal:
 class SignalSet:
     def __init__(self, dimension):
         self.signals: List[Signal] = [Signal() for _ in range(dimension)]
-        self.dimension = len(dimension)
+        self.dimension = dimension
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            return self, key
+            return self.signals[key]
         elif isinstance(key, str):
             for signal in self.signals:
                 if signal.name == key:
                     return signal
         else:
             raise KeyError("Invalid key type")
+        
+    def __len__(self):
+        return self.dimension
 
     def names_units(self, names, units=None):
         # TODO: add similar function to Subsystem like "name_outputs" and "name_inputs" such that you can't have an output named the same as an input
+        if isinstance(names, str):
+            names = [names]  # Convert the string into a list with a single element
+        elif not isinstance(names, list):
+            raise ValueError("Names must be a string or a list")
+        
+        if isinstance(units, str):
+            units = [units]  # Convert the string into a list with a single element
+        elif not isinstance(units, list) and units is not None:
+            raise ValueError("Units must be a string or a list")
+
         if len(names) != len(self.signals):
             raise ValueError("Number of names must match the number of signals")
         if units is not None and len(units) != len(self.signals):
@@ -80,19 +93,19 @@ class Subsystem:
 
         if len(x) == 0:
             # system is memoryless and output depends only on input
-            y = self.calc_outputs(self, u, time)
+            y = self.calc_outputs(u, time)
         else: 
             # pass the state into the output function
             # TODO: allow outputs that are a function of state and feedthrough input 
             # (or, rather, reconstruct system to seperate the feedforward component, assuming x & u are coupled)
-            y = self.calc_outputs(self, x, time)
+            y = self.calc_outputs(x, time)
 
         self.outputs.set_values(y)
 
     def update_dynamics(self, time):
         x = self.states.get_vector()
         u = self.inputs.get_vector()
-        return self.dynamics(self, x, u, time)
+        return self.dynamics(x, u, time)
         
     def calc_outputs(self, state_or_input, time):
         pass
@@ -110,15 +123,15 @@ class SimulationEngine:
 
     def connect(self, output_tuple, input_tuple):
         # output signal -> input signal
-        #  self.connections is a list of subsystems and their connections
+        # each argument tuple = (subsystem object, string or int index to identify the input or output)
 
         output_sys = output_tuple[0]
-        output_signal_name = output_tuple[1]
-        output_signal = output_sys.outputs[output_signal_name]
+        output_signal_identifier = output_tuple[1]
+        output_signal = output_sys.outputs[output_signal_identifier]
 
         input_sys = input_tuple[0]
-        input_signal_name = input_tuple[1]
-        input_signal = input_sys.inputs[input_signal_name]
+        input_signal_identifier = input_tuple[1]
+        input_signal = input_sys.inputs[input_signal_identifier]
 
         # check to see if subsystem already has connections
         for item in self.subsystem_list:
@@ -127,19 +140,33 @@ class SimulationEngine:
                 item['connections'].append((output_signal, input_signal))
                 break
         
-    def update_systems(self, time):
+    def update_outputs(self, time):
         index = 0
-        
+
         while index < len(self.subsystem_list):
             item = self.subsystem_list[index]
+
             if len(item['connections']) == 0 or len(item['subsystem'].states) != 0:
                 # first compute outputs of non-memoryless subsystems or subsystems with no inputs
-                self.update_outputs(item['subsystem'], time)
+                item['subsystem'].update_outputs(time)
                 index += 1
             else:
-                if item['connections'][0].count == item['connections'][1].count + 1:
-                    item['connections'][1].value = item['connections'][0].value
+                # check all connections to see that the feeding signal(s) have been computed
+                outputs_computed = True
+                for connection in item['connections']:
+                    # check that all feeding outputs have been updated
+                    output_signal = connection[0]
+                    input_signal = connection[1]
+                    if output_signal.count != input_signal.count + 1:
+                        outputs_computed = False
+                        break
+                
+                if outputs_computed:
                     index += 1
+                    for connection in item['connections']:
+                        output_signal = connection[0]
+                        input_signal = connection[1]
+                        input_signal.value = output_signal.value
                 else:
                     # Move the item at the current index to the end of the subsystem_list
                     current_item = self.subsystem_list[index]
@@ -149,10 +176,10 @@ class SimulationEngine:
     def populate_states(self, states):
         # unpack the state vector into the subsystems
         counter = 0
-        for subsystem in self.subsystems:
-            if len(subsystem.states) > 0:
-                subsystem.states.set_values(states[counter : counter + len(subsystem.states)])
-                counter += len(subsystem.states)
+        for item in self.subsystem_list:
+            if len(item['subsystem'].states) > 0:
+                item['subsystem'].states.set_values(states[counter : counter + len(item['subsystem'].states)])
+                counter += len(item['subsystem'].states)
 
     def dynamics(self, states, time):
         derivative = np.array([])
@@ -161,12 +188,13 @@ class SimulationEngine:
         self.populate_states(states)
 
         # compute outputs
-        self.update_systems()
+        self.update_outputs(time)
 
-        for subsystem in self.subsystems:
-            val = subsystem.dynamics(time)
-            if val is not None:
-                derivative = np.append(derivative, val)
+        # compute dynamics
+        for item in self.subsystem_list:
+            xdot = item['subsystem'].update_dynamics(time)
+            if xdot is not None:
+                derivative = np.append(derivative, xdot)
 
         return derivative
 

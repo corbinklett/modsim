@@ -17,15 +17,10 @@ sim.add_subsystem(plant)
 sim.add_subsystem(step)
 sim.add_subsystem(gain)
 
-gain.outputs.names_units("y", "V/m")
+gain.outputs.names_units("y")
 actuator.inputs.names_units("u", "V")
 
-# draw individual lines between blocks
-# vector lines too?
-# TODO: update so this just needs to be gain['k'] which automatically grabs the output
-# enforce that it only connects and output to an input
 # output -> input
-returns an object that contains both the subsystme and the signal
 sim.connect(gain["y"], actuator["u"])
 sim.connect(step[0], gain[0])
 sim.connect(actuator[0], plant[0])
@@ -33,9 +28,6 @@ sim.connect(actuator[0], plant[0])
 
 x0 = np.array([0,0,0])
 res = sim.simulate(x0, (0, 10))
-
-# left off - plot it. Then generalize dimension and add labels
-# then enforce types?
 
 import matplotlib.pyplot as plt
 

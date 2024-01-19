@@ -1,4 +1,4 @@
-from main import Subsystem, Signal, SignalSet
+from .main import Subsystem
 import numpy as np
 
 class LinearSystem(Subsystem):
