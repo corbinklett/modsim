@@ -77,6 +77,7 @@ class Subsystem:
         self.inputs = SignalSet(dim_inputs)
         self.outputs = SignalSet(dim_outputs)
         self.parameters = parameters
+        # TODO: add name attribute
 
         # TODO: update subsystem structure to have function primitives in addition to parameters. Could be used for autodiff?
         # The range of types that a parameter could take is wider than what a signal takes, which is just a 'float'
@@ -141,6 +142,7 @@ class SimulationEngine:
                 break
         
     def update_outputs(self, time):
+        # calls subsystem update_outputs functions while enforcing causality by rearranging the subsystem list, if necessary
         index = 0
 
         while index < len(self.subsystem_list):

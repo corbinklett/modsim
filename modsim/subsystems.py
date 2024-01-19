@@ -25,7 +25,6 @@ class LinearSystem(Subsystem):
             xdot += self.parameters['B'] @ u
         return xdot
 
-
 class Actuator(Subsystem):
 
     def __init__(self, time_constant):
