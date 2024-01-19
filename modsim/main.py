@@ -145,35 +145,40 @@ class SimulationEngine:
         # calls subsystem update_outputs functions while enforcing causality by rearranging the subsystem list, if necessary
         index = 0
 
+        output_computed_list = [] # list of subsystems that have had their outputs computed, so that the count doesn't increase by more than one
+
         while index < len(self.subsystem_list):
             item = self.subsystem_list[index]
 
-            if len(item['connections']) == 0 or len(item['subsystem'].states) != 0:
-                # first compute outputs of non-memoryless subsystems or subsystems with no inputs
-                item['subsystem'].update_outputs(time)
-                index += 1
-            else:
-                # check all connections to see that the feeding signal(s) have been computed
-                outputs_computed = True
+            # See if inputs can be assigned or if they already have been
+            all_inputs_computed = True
+            
+            for connection in item['connections']:
+                # check that all feeding outputs have been updated
+                output_signal = connection[0]
+                input_signal = connection[1]
+                if output_signal.count != input_signal.count + 1:
+                    all_inputs_computed = False
+                    break
+                
+            if all_inputs_computed:
                 for connection in item['connections']:
-                    # check that all feeding outputs have been updated
                     output_signal = connection[0]
                     input_signal = connection[1]
-                    if output_signal.count != input_signal.count + 1:
-                        outputs_computed = False
-                        break
-                
-                if outputs_computed:
-                    index += 1
-                    for connection in item['connections']:
-                        output_signal = connection[0]
-                        input_signal = connection[1]
-                        input_signal.value = output_signal.value
-                else:
-                    # Move the item at the current index to the end of the subsystem_list
-                    current_item = self.subsystem_list[index]
-                    self.subsystem_list.append(current_item)
-                    self.subsystem_list.pop(index)
+                    input_signal.value = output_signal.value
+
+            if all_inputs_computed or len(item['connections']) == 0 or len(item['subsystem'].states) != 0:
+                if item not in output_computed_list:
+                    item['subsystem'].update_outputs(time)
+                    output_computed_list.append(item)
+                    
+            if all_inputs_computed == False:
+                # Move the item at the current index to the end of the subsystem_list
+                current_item = self.subsystem_list[index]
+                self.subsystem_list.append(current_item)
+                self.subsystem_list.pop(index)
+            else:
+                index += 1
                 
     def populate_states(self, states):
         # unpack the state vector into the subsystems

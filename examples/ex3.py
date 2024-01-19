@@ -28,21 +28,21 @@ sim.connect(actuator[0], plant[0])
 # name the states as well?
 
 x0 = np.array([0,0,0])
-res = sim.simulate(x0, (0, 10))
+res = sim.simulate(x0, (0, 5))
 
 import matplotlib.pyplot as plt
 
 # Plotting the outputs
-# time = np.arange(0, 10, 0.01)  # Time array for plotting
-# output1 = res[:, 0]  # Extracting the first output
-# output2 = res[:, 1]  # Extracting the second output
+time = np.arange(0, 5, 0.01)  # Time array for plotting
+output1 = res[:, 0]  # Extracting the first output
+output2 = res[:, 1]  # Extracting the second output
 
-# plt.figure(figsize=(10, 6))
-# plt.plot(time, output1, label='Output 1')
-# plt.plot(time, output2, label='Output 2')
-# plt.xlabel('Time')
-# plt.ylabel('Output')
-# plt.title('Simulation Outputs')
-# plt.legend()
-# plt.grid(True)
-# plt.show()
+plt.figure(figsize=(10, 6))
+plt.plot(time, output1, label='Output 1')
+plt.plot(time, output2, label='Output 2')
+plt.xlabel('Time')
+plt.ylabel('Output')
+plt.title('Simulation Outputs')
+plt.legend()
+plt.grid(True)
+plt.show()
