@@ -167,11 +167,13 @@ class SimulationEngine:
                     input_signal = connection[1]
                     input_signal.value = output_signal.value
 
+            # Compute outputs:
             if all_inputs_computed or len(item['connections']) == 0 or len(item['subsystem'].states) != 0:
                 if item not in output_computed_list:
                     item['subsystem'].update_outputs(time)
                     output_computed_list.append(item)
-                    
+
+            # Rearrange the list if necessary, or advance index       
             if all_inputs_computed == False:
                 # Move the item at the current index to the end of the subsystem_list
                 current_item = self.subsystem_list[index]
@@ -216,8 +218,5 @@ class SimulationEngine:
         return state_trajectories
 
 
-# left off - testing ex2.py with the "Gain" added to see if the response is correct and if the subsystems are rearranged appropriately
-    # might not be since np.array([]) * 2.5 is not illegal. This is when doing the "try" on the outputs computation
 
-# left off - next example - assemble a full feedback loop, write test
-   
+# left off - label plots and states
