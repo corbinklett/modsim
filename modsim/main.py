@@ -117,7 +117,6 @@ class Subsystem:
 class SimulationEngine:
     def __init__(self):
         self.subsystem_list = [] # list of dictionaries 
-        self.count = 0
 
     def add_subsystem(self, subsystem):
         self.subsystem_list.append({'subsystem': subsystem, 'connections': []})
@@ -207,10 +206,17 @@ class SimulationEngine:
 
         return derivative
 
+    def reset_counts(self):
+        for item in self.subsystem_list:
+            for signal in item['subsystem'].states.signals:
+                signal.count = 0
+            for signal in item['subsystem'].inputs.signals:
+                signal.count = 0
+            for signal in item['subsystem'].outputs.signals:
+                signal.count = 0
+
     def simulate(self, initial_states, time, dt=0.01):
-    
-    # TODO: loop through subsystems and assign counts to zero
-        self.count = 0 # reset the function call count to help enforce causility
+        self.reset_counts()
         t0 = time[0] # tuple
         tf = time[1]
         t = np.arange(t0, tf, dt)
