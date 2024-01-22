@@ -1,5 +1,6 @@
+import matplotlib.pyplot as plt
 import numpy as np
-from typing import Any, List
+from typing import List
 from scipy.integrate import odeint
 
 # TODO: enforce types - each state, input, and output has to be a numpy array
@@ -117,6 +118,8 @@ class Subsystem:
 class SimulationEngine:
     def __init__(self):
         self.subsystem_list = [] # list of dictionaries 
+        self.time_range = np.array([])
+        self.state_trajectories = np.array([])
 
     def add_subsystem(self, subsystem):
         self.subsystem_list.append({'subsystem': subsystem, 'connections': []})
@@ -159,7 +162,7 @@ class SimulationEngine:
                 if output_signal.count != input_signal.count + 1:
                     all_inputs_computed = False
                     break
-                
+
             if all_inputs_computed:
                 for connection in item['connections']:
                     output_signal = connection[0]
@@ -219,10 +222,43 @@ class SimulationEngine:
         self.reset_counts()
         t0 = time[0] # tuple
         tf = time[1]
-        t = np.arange(t0, tf, dt)
-        state_trajectories = odeint(self.dynamics, initial_states, t)
-        return state_trajectories
+        self.time_range = np.arange(t0, tf, dt)
+        self.state_trajectories = odeint(self.dynamics, initial_states, self.time_range)
+        return self.state_trajectories
+    
+    def plot(self, plot_list=None, time_range=None):
+        if plot_list is None:
+            plot_list = self.subsystem_list
 
+        if time_range is None:
+            time_range = self.time_range
 
+        for item in plot_list:
+            subsystem = item['subsystem']
+            states = subsystem.states
+            inputs = subsystem.inputs
+            outputs = subsystem.outputs
 
-# left off - label plots and states
+            # Create a new figure and subplots for each subsystem
+            fig, axs = plt.subplots(3, 1, figsize=(8, 6))
+            fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
+
+            # Plot states
+            axs[0].plot(time_range, states.get_values(), label="States")
+            axs[0].set_ylabel("State Values")
+            axs[0].legend()
+
+            # Plot inputs
+            axs[1].plot(time_range, inputs.get_values(), label="Inputs")
+            axs[1].set_ylabel("Input Values")
+            axs[1].legend()
+
+            # Plot outputs
+            axs[2].plot(time_range, outputs.get_values(), label="Outputs")
+            axs[2].set_xlabel("Time")
+            axs[2].set_ylabel("Output Values")
+            axs[2].legend()
+
+            # Show the plot
+            plt.show()
+        
