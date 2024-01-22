@@ -3,7 +3,7 @@ cycler==0.12.1
 fonttools==4.47.0
 kiwisolver==1.4.5
 matplotlib==3.8.2
--e git+https://github.com/corbinklett/modsim.git@f930112b52e4a00123c51b93c6d274860163d047#egg=modsim
+-e git+https://github.com/corbinklett/modsim.git@d4ef977d02698722138b010f390e919e9dd4f26e#egg=modsim
 numpy==1.26.2
 packaging==23.2
 Pillow==10.1.0
