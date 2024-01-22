@@ -3,7 +3,6 @@ import numpy as np
 from typing import List
 from scipy.integrate import odeint
 
-# TODO: enforce types - each state, input, and output has to be a numpy array
 
 class Signal: 
     def __init__(self):
@@ -72,14 +71,19 @@ class SignalSet:
         for i, signal in enumerate(self.signals):
             signal.value = vector[i]
 
+
 class Subsystem:
     def __init__(self, dim_states, dim_inputs, dim_outputs, parameters={}):
         self.states = SignalSet(dim_states)
+        for state in self.states.signals:
+            state.value = 0
+
+        self.initial_states
+        
         self.inputs = SignalSet(dim_inputs)
         self.outputs = SignalSet(dim_outputs)
         self.parameters = parameters
         # TODO: add name attribute
-
         # TODO: update subsystem structure to have function primitives in addition to parameters. Could be used for autodiff?
         # The range of types that a parameter could take is wider than what a signal takes, which is just a 'float'
 
@@ -88,6 +92,41 @@ class Subsystem:
         
     def __getitem__(self, key):
         return self, key
+    
+class Subsystem:
+    def __init__(self, dim_states, dim_inputs, dim_outputs, parameters={}):
+        self.dim_states = dim_states
+        self.dim_inputs = dim_inputs
+        self.dim_outputs = dim_outputs
+
+        self.states = SignalSet(dim_states) # defaults to 0.0
+        self._initial_states = self.states.get_vector()
+        
+        self.inputs = SignalSet(dim_inputs)
+        self.outputs = SignalSet(dim_outputs)
+        self.parameters = parameters
+
+    def __getitem__(self, key):
+        return self, key
+
+    @property
+    def initial_states(self):
+        return self._initial_states
+
+    @initial_states.setter
+    def initial_states(self, vector):
+        if not isinstance(vector, np.ndarray):
+            vector = np.array(vector)
+        self._initial_states = vector
+        self.set_states(vector)
+    
+    def set_states(self, vector):        
+        if not isinstance(vector, np.ndarray):
+            vector = np.array(vector)   
+        self.states.set_values(vector)
+
+    def get_states(self):
+        return self.states.get_vector()
         
     def update_outputs(self, time):
         x = self.states.get_vector()
@@ -121,8 +160,11 @@ class SimulationEngine:
         self.time_range = np.array([])
         self.state_trajectories = np.array([])
 
-    def add_subsystem(self, subsystem):
+    def add_subsystem(self, subsystem, initial_states=None):
         self.subsystem_list.append({'subsystem': subsystem, 'connections': []})
+
+        if initial_states is not None:
+            subsystem.initial_states = initial_states
 
     def connect(self, output_tuple, input_tuple):
         # output signal -> input signal
@@ -148,7 +190,7 @@ class SimulationEngine:
         index = 0
 
         output_computed_list = [] # list of subsystems that have had their outputs computed, so that the count doesn't increase by more than one
-
+        print([item['subsystem'].__class__.__name__ for item in self.subsystem_list])
         while index < len(self.subsystem_list):
             item = self.subsystem_list[index]
 
@@ -183,14 +225,19 @@ class SimulationEngine:
                 self.subsystem_list.pop(index)
             else:
                 index += 1
+
+            print("Current Index:", index)
+            print("Outputs computed: ", [item['subsystem'].__class__.__name__ for item in output_computed_list])
+            print([item['subsystem'].__class__.__name__ for item in self.subsystem_list])
+
                 
     def populate_states(self, states):
-        # unpack the state vector into the subsystems
+        # unpack the entire state vector into the seperate subsystems
         counter = 0
         for item in self.subsystem_list:
-            if len(item['subsystem'].states) > 0:
-                item['subsystem'].states.set_values(states[counter : counter + len(item['subsystem'].states)])
-                counter += len(item['subsystem'].states)
+            if item['subsystem'].dim_states > 0:
+                item['subsystem'].set_states(states[counter : counter + item['subsystem'].dim_states])
+                counter += item['subsystem'].dim_states
 
     def dynamics(self, states, time):
         derivative = np.array([])
@@ -209,7 +256,7 @@ class SimulationEngine:
 
         return derivative
 
-    def reset_counts(self):
+    def reset_signal_counts(self):
         for item in self.subsystem_list:
             for signal in item['subsystem'].states.signals:
                 signal.count = 0
@@ -218,47 +265,63 @@ class SimulationEngine:
             for signal in item['subsystem'].outputs.signals:
                 signal.count = 0
 
-    def simulate(self, initial_states, time, dt=0.01):
-        self.reset_counts()
-        t0 = time[0] # tuple
-        tf = time[1]
+    def simulate(self, t0, tf, dt=0.01):
+        
         self.time_range = np.arange(t0, tf, dt)
+
+        # rearrange self.subsystem_list to enforce causality
+        # TODO: make arrange_subsystem() method, and update outputs method to simply apply a check for causality
+        print(self.subsystem_list)
+        self.reset_signal_counts()
+        self.update_outputs(0)
+        self.reset_signal_counts()  
+        print(self.subsystem_list)      
+
+        # populate initial states
+        initial_states = np.concatenate([item['subsystem'].get_states() for item in self.subsystem_list])
+
         self.state_trajectories = odeint(self.dynamics, initial_states, self.time_range)
+        print(self.subsystem_list)
         return self.state_trajectories
     
-    def plot(self, plot_list=None, time_range=None):
-        if plot_list is None:
-            plot_list = self.subsystem_list
+    # def plot(self, plot_list=None, time_range=None):
+    #     if plot_list is None:
+    #         plot_list = self.subsystem_list
 
-        if time_range is None:
-            time_range = self.time_range
+    #     if time_range is None:
+    #         time_range = self.time_range
 
-        for item in plot_list:
-            subsystem = item['subsystem']
-            states = subsystem.states
-            inputs = subsystem.inputs
-            outputs = subsystem.outputs
+    #     for item in plot_list:
+    #         subsystem = item['subsystem']
+    #         states = subsystem.states
+    #         inputs = subsystem.inputs
+    #         outputs = subsystem.outputs
 
-            # Create a new figure and subplots for each subsystem
-            fig, axs = plt.subplots(3, 1, figsize=(8, 6))
-            fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
+    #         # loop through the state trajectory solution
 
-            # Plot states
-            axs[0].plot(time_range, states.get_values(), label="States")
-            axs[0].set_ylabel("State Values")
-            axs[0].legend()
 
-            # Plot inputs
-            axs[1].plot(time_range, inputs.get_values(), label="Inputs")
-            axs[1].set_ylabel("Input Values")
-            axs[1].legend()
+    #         # Create a new figure and subplots for each subsystem
+    #         fig, axs = plt.subplots(3, 1, figsize=(8, 6))
+    #         fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
 
-            # Plot outputs
-            axs[2].plot(time_range, outputs.get_values(), label="Outputs")
-            axs[2].set_xlabel("Time")
-            axs[2].set_ylabel("Output Values")
-            axs[2].legend()
 
-            # Show the plot
-            plt.show()
+            
+    #         # Plot states
+    #         axs[0].plot(time_range, states.get_values(), label="States")
+    #         axs[0].set_ylabel("State Values")
+    #         axs[0].legend()
+
+    #         # Plot inputs
+    #         axs[1].plot(time_range, inputs.get_values(), label="Inputs")
+    #         axs[1].set_ylabel("Input Values")
+    #         axs[1].legend()
+
+    #         # Plot outputs
+    #         axs[2].plot(time_range, outputs.get_values(), label="Outputs")
+    #         axs[2].set_xlabel("Time")
+    #         axs[2].set_ylabel("Output Values")
+    #         axs[2].legend()
+
+    #         # Show the plot
+    #         plt.show()
         

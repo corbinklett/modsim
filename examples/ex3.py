@@ -13,9 +13,9 @@ gain = ms.Gain(2.5)
 
 sim = ms.SimulationEngine()
 sim.add_subsystem(actuator)
-sim.add_subsystem(plant)
 sim.add_subsystem(gain)
 sim.add_subsystem(step)
+sim.add_subsystem(plant, [0, 1])
 
 gain.outputs.names_units("y")
 actuator.inputs.names_units("u", "V")
@@ -25,27 +25,31 @@ sim.connect(gain["y"], actuator["u"])
 sim.connect(step[0], gain[0])
 sim.connect(actuator[0], plant[0])
 
-x0 = np.array([0,0,0])
-res = sim.simulate(x0, (0, 5))
+actuator.initial_states = [.1]  # TODO: make initial_states an attribute with setter that changes states
 
-import matplotlib.pyplot as plt
+t0 = 0
+tf = 5
+dt = .01
+# res = sim.simulate(t0, tf, dt)
 
-# Plotting the outputs
-time = np.arange(0, 5, 0.01)  # Time array for plotting
-output1 = res[:, 0]  # Extracting the first output
-output2 = res[:, 1]  # Extracting the second output
+# import matplotlib.pyplot as plt
 
-sim.plot()
+# # Plotting the outputs
+# time = np.arange(0, 5, 0.01)  # Time array for plotting
+# output1 = res[:, 0]  # Extracting the first output
+# output2 = res[:, 1]  # Extracting the second output
 
-plt.figure(figsize=(10, 6))
-plt.plot(time, output1, label='Output 1')
-plt.plot(time, output2, label='Output 2')
-plt.xlabel('Time')
-plt.ylabel('Output')
-plt.title('Simulation Outputs')
-plt.legend()
-plt.grid(True)
-plt.show()
+# # sim.plot()
 
-# next - do a closed loop system, and try multiple inputs/outputs
-# name the states as well?
+# plt.figure(figsize=(10, 6))
+# plt.plot(time, output1, label='Output 1')
+# plt.plot(time, output2, label='Output 2')
+# plt.xlabel('Time')
+# plt.ylabel('Output')
+# plt.title('Simulation Outputs')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
+
+# # next - do a closed loop system, and try multiple inputs/outputs
+# # name the states as well?
