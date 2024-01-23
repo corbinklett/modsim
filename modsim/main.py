@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
 from typing import List
 from scipy.integrate import odeint
@@ -70,6 +70,10 @@ class SignalSet:
         # place numpy array of values into the signal set
         for i, signal in enumerate(self.signals):
             signal.value = vector[i]
+
+    def reset_signal_counts(self):
+        for signal in self.signals:
+            signal.count = 0
 
 
 class Subsystem:
@@ -157,9 +161,17 @@ class Subsystem:
 class SimulationEngine:
     def __init__(self):
         self.subsystem_list = [] # list of dictionaries 
+        self.arranged_subsystem_list = []
         self.time_range = np.array([])
         self.state_trajectories = np.array([])
 
+    # TODO: implement __getitem__ method to return a subsystem object; may need to name subsystems first
+    # def __getitem__(self, key):
+    #     for item in self.subsystem_list:
+    #         if item['subsystem'] == key:
+    #             return item
+    #     raise KeyError("Subsystem not found")
+    
     def add_subsystem(self, subsystem, initial_states=None):
         self.subsystem_list.append({'subsystem': subsystem, 'connections': []})
 
@@ -188,11 +200,10 @@ class SimulationEngine:
     def update_outputs(self, time):
         # calls subsystem update_outputs functions while enforcing causality by rearranging the subsystem list, if necessary
         index = 0
-
         output_computed_list = [] # list of subsystems that have had their outputs computed, so that the count doesn't increase by more than one
-        print([item['subsystem'].__class__.__name__ for item in self.subsystem_list])
-        while index < len(self.subsystem_list):
-            item = self.subsystem_list[index]
+
+        while index < len(self.arranged_subsystem_list):
+            item = self.arranged_subsystem_list[index]
 
             # See if inputs can be assigned or if they already have been
             all_inputs_computed = True
@@ -220,16 +231,11 @@ class SimulationEngine:
             # Rearrange the list if necessary, or advance index       
             if all_inputs_computed == False:
                 # Move the item at the current index to the end of the subsystem_list
-                current_item = self.subsystem_list[index]
-                self.subsystem_list.append(current_item)
-                self.subsystem_list.pop(index)
+                current_item = self.arranged_subsystem_list[index]
+                self.arranged_subsystem_list.append(current_item)
+                self.arranged_subsystem_list.pop(index)
             else:
                 index += 1
-
-            print("Current Index:", index)
-            print("Outputs computed: ", [item['subsystem'].__class__.__name__ for item in output_computed_list])
-            print([item['subsystem'].__class__.__name__ for item in self.subsystem_list])
-
                 
     def populate_states(self, states):
         # unpack the entire state vector into the seperate subsystems
@@ -266,22 +272,14 @@ class SimulationEngine:
                 signal.count = 0
 
     def simulate(self, t0, tf, dt=0.01):
-        
-        self.time_range = np.arange(t0, tf, dt)
-
-        # rearrange self.subsystem_list to enforce causality
-        # TODO: make arrange_subsystem() method, and update outputs method to simply apply a check for causality
-        print(self.subsystem_list)
         self.reset_signal_counts()
-        self.update_outputs(0)
-        self.reset_signal_counts()  
-        print(self.subsystem_list)      
+        self.arranged_subsystem_list = [item for item in self.subsystem_list] # does not copy objects; creates a new list of references to the same objects
+        self.time_range = np.arange(t0, tf, dt)
 
         # populate initial states
         initial_states = np.concatenate([item['subsystem'].get_states() for item in self.subsystem_list])
-
+        
         self.state_trajectories = odeint(self.dynamics, initial_states, self.time_range)
-        print(self.subsystem_list)
         return self.state_trajectories
     
     # def plot(self, plot_list=None, time_range=None):
