@@ -29,16 +29,15 @@ actuator.initial_states = [.1]  # TODO: make initial_states an attribute with se
 
 t0 = 0
 tf = 10
-dt = .01
-res = sim.simulate(t0, tf, dt)
+res = sim.simulate(t0, tf)
+time = res.t
 
 # import matplotlib.pyplot as plt
 
 # Plotting the outputs
-time = np.arange(t0, tf, dt)  # Time array for plotting
-output1 = res[:, 0]  # Extracting the first output
-output2 = res[:, 1]  # Extracting the second output
-output3 = res[:, 2]  # Extracting the third output
+output1 = res.y[0]  # Extracting the first output
+output2 = res.y[1]  # Extracting the second output
+output3 = res.y[2]  # Extracting the third output
 
 # sim.plot()
 

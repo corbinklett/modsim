@@ -1,7 +1,7 @@
 #import matplotlib.pyplot as plt
 import numpy as np
 from typing import List
-from scipy.integrate import odeint
+from scipy.integrate import solve_ivp
 
 
 class Signal: 
@@ -74,28 +74,6 @@ class SignalSet:
     def reset_signal_counts(self):
         for signal in self.signals:
             signal.count = 0
-
-
-class Subsystem:
-    def __init__(self, dim_states, dim_inputs, dim_outputs, parameters={}):
-        self.states = SignalSet(dim_states)
-        for state in self.states.signals:
-            state.value = 0
-
-        self.initial_states
-        
-        self.inputs = SignalSet(dim_inputs)
-        self.outputs = SignalSet(dim_outputs)
-        self.parameters = parameters
-        # TODO: add name attribute
-        # TODO: update subsystem structure to have function primitives in addition to parameters. Could be used for autodiff?
-        # The range of types that a parameter could take is wider than what a signal takes, which is just a 'float'
-
-    # TODO: write a function that (optionally) names the states, inputs, and outputs and assigns units
-    # def name_variables(self):
-        
-    def __getitem__(self, key):
-        return self, key
     
 class Subsystem:
     def __init__(self, dim_states, dim_inputs, dim_outputs, parameters={}):
@@ -162,8 +140,8 @@ class SimulationEngine:
     def __init__(self):
         self.subsystem_list = [] # list of dictionaries 
         self.arranged_subsystem_list = []
-        self.time_range = np.array([])
-        self.state_trajectories = np.array([])
+        self.time_range = ()
+        self.sim_solution = None
 
     # TODO: implement __getitem__ method to return a subsystem object; may need to name subsystems first
     # def __getitem__(self, key):
@@ -245,7 +223,7 @@ class SimulationEngine:
                 item['subsystem'].set_states(states[counter : counter + item['subsystem'].dim_states])
                 counter += item['subsystem'].dim_states
 
-    def dynamics(self, states, time):
+    def dynamics(self, time, states):
         derivative = np.array([])
 
         # populate states
@@ -271,16 +249,49 @@ class SimulationEngine:
             for signal in item['subsystem'].outputs.signals:
                 signal.count = 0
 
-    def simulate(self, t0, tf, dt=0.01):
+    def simulate(self, t0, tf):
         self.reset_signal_counts()
         self.arranged_subsystem_list = [item for item in self.subsystem_list] # does not copy objects; creates a new list of references to the same objects
-        self.time_range = np.arange(t0, tf, dt)
+        self.time_range = (t0, tf)
 
         # populate initial states
         initial_states = np.concatenate([item['subsystem'].get_states() for item in self.subsystem_list])
-        
-        self.state_trajectories = odeint(self.dynamics, initial_states, self.time_range)
-        return self.state_trajectories
+
+        self.sim_solution = solve_ivp(self.dynamics, self.time_range, initial_states)
+        return self.sim_solution
+    
+    def collect_inputs_outputs(self):
+        # Collect inputs and outputs from all subsystems. Format just like the solve_ivp solution
+        time_vector = self.sim_solution.t
+
+        num_inputs = 0
+        num_outputs = 0
+        for item in self.subsystem_list:
+            num_inputs += item['subsystem'].dim_inputs
+            num_outputs += item['subsystem'].dim_outputs
+
+        inputs = np.empty((num_inputs, len(time_vector)))
+        outputs = np.empty((num_outputs, len(time_vector)))
+
+        time_index = 0
+        for time in time_vector:
+            states = self.sim_solution.y[:, time_index]
+            self.populate_states(states)
+            self.update_outputs(time)
+
+            input_index = 0
+            output_index = 0
+            for item in self.subsystem_list:
+                for signal in item['subsystem'].inputs.signals:
+                    inputs[input_index, time_index] = signal.value
+                    input_index += 1
+                for signal in item['subsystem'].outputs.signals:
+                    outputs[output_index, time_index] = signal.value
+                    output_index += 1
+                
+            time_index += 1
+
+        return inputs, outputs
     
     # def plot(self, plot_list=None, time_range=None):
     #     if plot_list is None:
@@ -289,6 +300,10 @@ class SimulationEngine:
     #     if time_range is None:
     #         time_range = self.time_range
 
+    #     # recompute outputs and inputs
+    #     self.reset_signal_counts()
+
+
     #     for item in plot_list:
     #         subsystem = item['subsystem']
     #         states = subsystem.states
@@ -296,14 +311,12 @@ class SimulationEngine:
     #         outputs = subsystem.outputs
 
     #         # loop through the state trajectory solution
-
+            
 
     #         # Create a new figure and subplots for each subsystem
     #         fig, axs = plt.subplots(3, 1, figsize=(8, 6))
     #         fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
 
-
-            
     #         # Plot states
     #         axs[0].plot(time_range, states.get_values(), label="States")
     #         axs[0].set_ylabel("State Values")
