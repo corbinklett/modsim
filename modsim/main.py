@@ -5,11 +5,13 @@ from scipy.integrate import solve_ivp
 
 
 class Signal: 
-    def __init__(self):
-        self._value: float = 0.0  # scalar, enforce type as float
+    def __init__(self, subsystem=None):
+        self._value: float = 0.0  # scalar
         self.name: str = ""
         self.unit: str = ""
         self.count: int = 0 # keeps track of assignments to this signal
+        self.subsystem = subsystem # weird way to do it, but gives the signal knowledge of its owning subsystem
+        #TODO: add description for ingestion by LLM
 
     @property
     def value(self):
@@ -22,9 +24,10 @@ class Signal:
         
 
 class SignalSet:
-    def __init__(self, dimension):
-        self.signals: List[Signal] = [Signal() for _ in range(dimension)]
+    def __init__(self, dimension, subsystem=None):
+        self.signals: List[Signal] = [Signal(subsystem) for _ in range(dimension)]
         self.dimension = dimension
+        self.subsystem = subsystem
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -76,17 +79,20 @@ class SignalSet:
             signal.count = 0
     
 class Subsystem:
-    def __init__(self, dim_states, dim_inputs, dim_outputs, parameters={}):
+    # TODO: allow subsystems to contain subsystems
+    def __init__(self, dim_states, dim_inputs, dim_outputs, parameters={}, name =''):
         self.dim_states = dim_states
         self.dim_inputs = dim_inputs
         self.dim_outputs = dim_outputs
 
-        self.states = SignalSet(dim_states) # defaults to 0.0
+        self.states = SignalSet(dim_states, self) # defaults to 0.0
         self._initial_states = self.states.get_vector()
         
-        self.inputs = SignalSet(dim_inputs)
-        self.outputs = SignalSet(dim_outputs)
+        self.inputs = SignalSet(dim_inputs, self)
+        self.outputs = SignalSet(dim_outputs, self)
         self.parameters = parameters
+
+        self.name = name
 
     def __getitem__(self, key):
         return self, key
@@ -141,7 +147,7 @@ class SimulationEngine:
         self.subsystem_list = [] # list of dictionaries 
         self.arranged_subsystem_list = []
         self.time_range = ()
-        self.sim_solution = None
+        self.sim_solution = {}
 
     # TODO: implement __getitem__ method to return a subsystem object; may need to name subsystems first
     # def __getitem__(self, key):
@@ -151,6 +157,11 @@ class SimulationEngine:
     #     raise KeyError("Subsystem not found")
     
     def add_subsystem(self, subsystem, initial_states=None):
+        # Check for duplicate subsystem names
+        for item in self.subsystem_list:
+            if item['subsystem'].name == subsystem.name:
+                raise ValueError(f"Duplicate subsystem name: {subsystem.name}")
+
         self.subsystem_list.append({'subsystem': subsystem, 'connections': []})
 
         if initial_states is not None:
@@ -250,6 +261,7 @@ class SimulationEngine:
                 signal.count = 0
 
     def simulate(self, t0, tf):
+        self.sim_solution = {}
         self.reset_signal_counts()
         self.arranged_subsystem_list = [item for item in self.subsystem_list] # does not copy objects; creates a new list of references to the same objects
         self.time_range = (t0, tf)
@@ -257,12 +269,36 @@ class SimulationEngine:
         # populate initial states
         initial_states = np.concatenate([item['subsystem'].get_states() for item in self.subsystem_list])
 
-        self.sim_solution = solve_ivp(self.dynamics, self.time_range, initial_states)
-        return self.sim_solution
+        ode_solution = solve_ivp(self.dynamics, self.time_range, initial_states)
+
+        # save data for plotting
+        #self.package_solution(self, ode_solution)
+
+        return ode_solution #self.sim_solution
     
-    def collect_inputs_outputs(self):
+    def package_solution(self, ode_solution):
         # Collect inputs and outputs from all subsystems. Format just like the solve_ivp solution
-        time_vector = self.sim_solution.t
+
+        self.sim_solution['ode_solution'] = ode_solution
+        self.sim_solution['t'] = ode_solution.t
+        self.sim_solution['subsystems'] = {}
+
+        for item in self.subsystem_list:
+            subsystem = item['subsystem']   
+            self.sim_solution['subsystems'][subsystem.name] = {}
+            self.sim_solution['subsystems'][subsystem.name]['states'] = [] # list of dictionaries with state names, units, and values
+            for signal in subsystem.states.signals:
+                # TODO: add ability to get state by name as well as index
+                self.sim_solution['subsystems'][subsystem.name]['states'].append({'name': signal.name, 'unit': signal.unit, 'values': np.array([])})
+            self.sim_solution['subsystems'][subsystem.name]['inputs'] = []
+            self.sim_solution['subsystems'][subsystem.name]['outputs'] = []
+
+        time_vector = self.sim_solution['t']
+        
+        # set states
+        self.populate_states(ode_solution.y[:,0])
+        save them in the list
+        compute inputs and outputs
 
         num_inputs = 0
         num_outputs = 0
@@ -275,13 +311,19 @@ class SimulationEngine:
 
         time_index = 0
         for time in time_vector:
-            states = self.sim_solution.y[:, time_index]
+            states = ode_solution.y[:, time_index]
             self.populate_states(states)
             self.update_outputs(time)
 
+            for item in self.subsystem_list:
+                subsystem = item['subsystem']
+                for state_index in len(subsystem.dim_states):
+                    self.sim_solution[subsystem.name]['states'][state_index]['values'].append([subsystem.states[state_index].value])
             input_index = 0
             output_index = 0
             for item in self.subsystem_list:
+                LEFT OFF - here
+
                 for signal in item['subsystem'].inputs.signals:
                     inputs[input_index, time_index] = signal.value
                     input_index += 1
@@ -293,7 +335,9 @@ class SimulationEngine:
 
         return inputs, outputs
     
-    # def plot(self, plot_list=None, time_range=None):
+    # def plot(self, plot_list=None, time_range=None): how to give this an artibrary number of args?
+           # sim.plot(actuator.states[0], actuator.outputs['y']) # plots against time
+
     #     if plot_list is None:
     #         plot_list = self.subsystem_list
 

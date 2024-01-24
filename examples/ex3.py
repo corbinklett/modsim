@@ -54,3 +54,4 @@ plt.show()
 
 # # next - do a closed loop system, and try multiple inputs/outputs
 # # name the states as well?
+# save outputs to csv
