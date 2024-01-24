@@ -29,7 +29,8 @@ actuator.initial_states = [.1]  # TODO: make initial_states an attribute with se
 
 t0 = 0
 tf = 10
-res = sim.simulate(t0, tf)
+sol = sim.simulate(t0, tf)
+res = sol['ode_solution']
 time = res.t
 
 # import matplotlib.pyplot as plt

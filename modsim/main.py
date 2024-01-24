@@ -27,7 +27,7 @@ class SignalSet:
     def __init__(self, dimension, subsystem=None):
         self.signals: List[Signal] = [Signal(subsystem) for _ in range(dimension)]
         self.dimension = dimension
-        self.subsystem = subsystem
+        self.subsystem = subsystem # weird way to do it, but gives the signal set knowledge of its owning subsystem
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -272,111 +272,95 @@ class SimulationEngine:
         ode_solution = solve_ivp(self.dynamics, self.time_range, initial_states)
 
         # save data for plotting
-        #self.package_solution(self, ode_solution)
+        self.package_solution(ode_solution)
 
-        return ode_solution #self.sim_solution
+        return self.sim_solution
     
     def package_solution(self, ode_solution):
+        # TODO: document the sim_solution dictionary
         # Collect inputs and outputs from all subsystems. Format just like the solve_ivp solution
 
         self.sim_solution['ode_solution'] = ode_solution
         self.sim_solution['t'] = ode_solution.t
-        self.sim_solution['subsystems'] = {}
+        self.sim_solution['trajectories'] = {}
+
+        sol_length = len(ode_solution.t)
 
         for item in self.subsystem_list:
             subsystem = item['subsystem']   
-            self.sim_solution['subsystems'][subsystem.name] = {}
-            self.sim_solution['subsystems'][subsystem.name]['states'] = [] # list of dictionaries with state names, units, and values
+            self.sim_solution['trajectories'][subsystem.name] = {}
+            
+            self.sim_solution['trajectories'][subsystem.name]['states'] = [] # list of dictionaries with state names, units, and values
             for signal in subsystem.states.signals:
                 # TODO: add ability to get state by name as well as index
-                self.sim_solution['subsystems'][subsystem.name]['states'].append({'name': signal.name, 'unit': signal.unit, 'values': np.array([])})
-            self.sim_solution['subsystems'][subsystem.name]['inputs'] = []
-            self.sim_solution['subsystems'][subsystem.name]['outputs'] = []
+                self.sim_solution['trajectories'][subsystem.name]['states'].append({'name': signal.name, 'unit': signal.unit, 'values': np.empty(sol_length)})
+            
+            self.sim_solution['trajectories'][subsystem.name]['inputs'] = []
+            for signal in subsystem.inputs.signals:
+                self.sim_solution['trajectories'][subsystem.name]['inputs'].append({'name': signal.name, 'unit': signal.unit, 'values': np.empty(sol_length)})
+            
+            self.sim_solution['trajectories'][subsystem.name]['outputs'] = []
+            for signal in subsystem.outputs.signals:
+                self.sim_solution['trajectories'][subsystem.name]['outputs'].append({'name': signal.name, 'unit': signal.unit, 'values': np.empty(sol_length)})
 
-        time_vector = self.sim_solution['t']
-        
-        # set states
-        self.populate_states(ode_solution.y[:,0])
-        save them in the list
-        compute inputs and outputs
-
-        num_inputs = 0
-        num_outputs = 0
-        for item in self.subsystem_list:
-            num_inputs += item['subsystem'].dim_inputs
-            num_outputs += item['subsystem'].dim_outputs
-
-        inputs = np.empty((num_inputs, len(time_vector)))
-        outputs = np.empty((num_outputs, len(time_vector)))
-
-        time_index = 0
-        for time in time_vector:
+        for time_index, time in enumerate(ode_solution.t):
             states = ode_solution.y[:, time_index]
             self.populate_states(states)
             self.update_outputs(time)
 
             for item in self.subsystem_list:
                 subsystem = item['subsystem']
-                for state_index in len(subsystem.dim_states):
-                    self.sim_solution[subsystem.name]['states'][state_index]['values'].append([subsystem.states[state_index].value])
-            input_index = 0
-            output_index = 0
-            for item in self.subsystem_list:
-                LEFT OFF - here
-
-                for signal in item['subsystem'].inputs.signals:
-                    inputs[input_index, time_index] = signal.value
-                    input_index += 1
-                for signal in item['subsystem'].outputs.signals:
-                    outputs[output_index, time_index] = signal.value
-                    output_index += 1
-                
-            time_index += 1
-
-        return inputs, outputs
+                for state_index in range(subsystem.dim_states):
+                    self.sim_solution['trajectories'][subsystem.name]['states'][state_index]['values'][time_index] = subsystem.states[state_index].value
+                for input_index in range(subsystem.dim_inputs):
+                    self.sim_solution['trajectories'][subsystem.name]['inputs'][input_index]['values'][time_index] = subsystem.inputs[input_index].value
+                for output_index in range(subsystem.dim_outputs):
+                    self.sim_solution['trajectories'][subsystem.name]['outputs'][output_index]['values'][time_index] = subsystem.outputs[output_index].value
+                 
+        return self.sim_solution
     
-    # def plot(self, plot_list=None, time_range=None): how to give this an artibrary number of args?
-           # sim.plot(actuator.states[0], actuator.outputs['y']) # plots against time
+    def plot(self, plot_list=None, time_range=None): how to give this an artibrary number of args?
+           sim.plot(actuator.states[0], actuator.outputs['y']) # plots against time
 
-    #     if plot_list is None:
-    #         plot_list = self.subsystem_list
+        if plot_list is None:
+            plot_list = self.subsystem_list
 
-    #     if time_range is None:
-    #         time_range = self.time_range
+        if time_range is None:
+            time_range = self.time_range
 
-    #     # recompute outputs and inputs
-    #     self.reset_signal_counts()
+        # recompute outputs and inputs
+        self.reset_signal_counts()
 
 
-    #     for item in plot_list:
-    #         subsystem = item['subsystem']
-    #         states = subsystem.states
-    #         inputs = subsystem.inputs
-    #         outputs = subsystem.outputs
+        for item in plot_list:
+            subsystem = item['subsystem']
+            states = subsystem.states
+            inputs = subsystem.inputs
+            outputs = subsystem.outputs
 
-    #         # loop through the state trajectory solution
+            # loop through the state trajectory solution
             
 
-    #         # Create a new figure and subplots for each subsystem
-    #         fig, axs = plt.subplots(3, 1, figsize=(8, 6))
-    #         fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
+            # Create a new figure and subplots for each subsystem
+            fig, axs = plt.subplots(3, 1, figsize=(8, 6))
+            fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
 
-    #         # Plot states
-    #         axs[0].plot(time_range, states.get_values(), label="States")
-    #         axs[0].set_ylabel("State Values")
-    #         axs[0].legend()
+            # Plot states
+            axs[0].plot(time_range, states.get_values(), label="States")
+            axs[0].set_ylabel("State Values")
+            axs[0].legend()
 
-    #         # Plot inputs
-    #         axs[1].plot(time_range, inputs.get_values(), label="Inputs")
-    #         axs[1].set_ylabel("Input Values")
-    #         axs[1].legend()
+            # Plot inputs
+            axs[1].plot(time_range, inputs.get_values(), label="Inputs")
+            axs[1].set_ylabel("Input Values")
+            axs[1].legend()
 
-    #         # Plot outputs
-    #         axs[2].plot(time_range, outputs.get_values(), label="Outputs")
-    #         axs[2].set_xlabel("Time")
-    #         axs[2].set_ylabel("Output Values")
-    #         axs[2].legend()
+            # Plot outputs
+            axs[2].plot(time_range, outputs.get_values(), label="Outputs")
+            axs[2].set_xlabel("Time")
+            axs[2].set_ylabel("Output Values")
+            axs[2].legend()
 
-    #         # Show the plot
-    #         plt.show()
+            # Show the plot
+            plt.show()
         
