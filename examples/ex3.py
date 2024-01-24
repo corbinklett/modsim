@@ -21,9 +21,9 @@ gain.outputs.names_units("y")
 actuator.inputs.names_units("u", "V")
 
 # output -> input
-sim.connect(gain["y"], actuator["u"])
-sim.connect(step[0], gain[0])
-sim.connect(actuator[0], plant[0])
+sim.connect(gain.outputs["y"], actuator.inputs["u"])
+sim.connect(step.outputs[0], gain.inputs[0])
+sim.connect(actuator.outputs[0], plant.inputs[0])
 
 actuator.initial_states = [.1]  # TODO: make initial_states an attribute with setter that changes states
 

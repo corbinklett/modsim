@@ -1,18 +1,24 @@
-#import matplotlib.pyplot as plt
+from enum import Enum
+import matplotlib.pyplot as plt
 import numpy as np
 from typing import List
 from scipy.integrate import solve_ivp
 
+class SignalType(Enum):
+    STATE = 1
+    INPUT = 2
+    OUTPUT = 3
 
 class Signal: 
-    def __init__(self, subsystem=None):
+    def __init__(self, signal_type: SignalType = None, subsystem = None):
         self._value: float = 0.0  # scalar
         self.name: str = ""
         self.unit: str = ""
         self.count: int = 0 # keeps track of assignments to this signal
+        self.signal_type: SignalType = signal_type
         self.subsystem = subsystem # weird way to do it, but gives the signal knowledge of its owning subsystem
         #TODO: add description for ingestion by LLM
-
+    
     @property
     def value(self):
         return self._value
@@ -24,20 +30,24 @@ class Signal:
         
 
 class SignalSet:
-    def __init__(self, dimension, subsystem=None):
-        self.signals: List[Signal] = [Signal(subsystem) for _ in range(dimension)]
+    def __init__(self, dimension, signal_type: SignalType = None, subsystem = None):
+        self.signals: List[Signal] = [Signal(signal_type, subsystem) for _ in range(dimension)]
         self.dimension = dimension
+        self.signal_type: SignalType = signal_type
         self.subsystem = subsystem # weird way to do it, but gives the signal set knowledge of its owning subsystem
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            return self.signals[key]
+            signal = self.signals[key]
         elif isinstance(key, str):
-            for signal in self.signals:
-                if signal.name == key:
-                    return signal
+            for sig in self.signals:
+                if sig.name == key:
+                    signal = sig
+                    break
         else:
-            raise KeyError("Invalid key type")
+            raise KeyError(f"Invalid signal identifier in subsystem {self.subsystem.name} of type {self.signal_type}")
+        
+        return signal, self.signal_type, self.subsystem
         
     def __len__(self):
         return self.dimension
@@ -85,17 +95,17 @@ class Subsystem:
         self.dim_inputs = dim_inputs
         self.dim_outputs = dim_outputs
 
-        self.states = SignalSet(dim_states, self) # defaults to 0.0
+        self.states = SignalSet(dim_states, SignalType.STATE, self) # defaults to 0.0
         self._initial_states = self.states.get_vector()
         
-        self.inputs = SignalSet(dim_inputs, self)
-        self.outputs = SignalSet(dim_outputs, self)
+        self.inputs = SignalSet(dim_inputs, SignalType.INPUT, self)
+        self.outputs = SignalSet(dim_outputs, SignalType.OUTPUT, self)
         self.parameters = parameters
 
         self.name = name
 
-    def __getitem__(self, key):
-        return self, key
+    # def __getitem__(self, key):
+    #     return self, key
 
     @property
     def initial_states(self):
@@ -171,19 +181,19 @@ class SimulationEngine:
         # output signal -> input signal
         # each argument tuple = (subsystem object, string or int index to identify the input or output)
 
-        output_sys = output_tuple[0]
-        output_signal_identifier = output_tuple[1]
-        output_signal = output_sys.outputs[output_signal_identifier]
+        output_sys = output_tuple[2]
+        output_signal = output_tuple[0] # TODO: confirm that the signal is type OUTPUT?
 
-        input_sys = input_tuple[0]
-        input_signal_identifier = input_tuple[1]
-        input_signal = input_sys.inputs[input_signal_identifier]
+        input_sys = input_tuple[2]
+        input_signal = input_tuple[0] # TODO: confirm that the signal is type INPUT?
 
-        # check to see if subsystem already has connections
         for item in self.subsystem_list:
             # TODO: implement more efficient search through the list of dictionaries
             if item['subsystem'] == input_sys:
-                item['connections'].append((output_signal, input_signal))
+                connections = item['connections']
+                if (output_signal, input_signal) in connections:
+                    raise ValueError("Redundant connection")
+                connections.append((output_signal, input_signal))
                 break
         
     def update_outputs(self, time):
@@ -311,56 +321,71 @@ class SimulationEngine:
             for item in self.subsystem_list:
                 subsystem = item['subsystem']
                 for state_index in range(subsystem.dim_states):
-                    self.sim_solution['trajectories'][subsystem.name]['states'][state_index]['values'][time_index] = subsystem.states[state_index].value
+                    self.sim_solution['trajectories'][subsystem.name]['states'][state_index]['values'][time_index] = subsystem.states[state_index][0].value
                 for input_index in range(subsystem.dim_inputs):
-                    self.sim_solution['trajectories'][subsystem.name]['inputs'][input_index]['values'][time_index] = subsystem.inputs[input_index].value
+                    self.sim_solution['trajectories'][subsystem.name]['inputs'][input_index]['values'][time_index] = subsystem.inputs[input_index][0].value
                 for output_index in range(subsystem.dim_outputs):
-                    self.sim_solution['trajectories'][subsystem.name]['outputs'][output_index]['values'][time_index] = subsystem.outputs[output_index].value
+                    self.sim_solution['trajectories'][subsystem.name]['outputs'][output_index]['values'][time_index] = subsystem.outputs[output_index][0].value
                  
         return self.sim_solution
     
-    def plot(self, plot_list=None, time_range=None): how to give this an artibrary number of args?
-           sim.plot(actuator.states[0], actuator.outputs['y']) # plots against time
+    # def plot(self, *args, time_range=None):
+    #     if time_range is None:
+    #         time_range = self.time_range
 
-        if plot_list is None:
-            plot_list = self.subsystem_list
+    #     # Rest of the code goes here
+           
+    #     # if no args, plot everything 
 
-        if time_range is None:
-            time_range = self.time_range
+    #     time = self.sim_solution['t']
+    #     plot_time = time[(time >= time_range[0]) & (time <= time_range[1])]
 
-        # recompute outputs and inputs
-        self.reset_signal_counts()
+    #     for arg in args:
+           
+    #        self.sim_solution['trajectories'][arg.subsystem.name][arg.signal_type][arg.signal_index]['values']
+    #        arg.subsystem.name
+
+    #        sim.plot(actuator.states[0], actuator.outputs['y']) # plots against time
+
+    #     if plot_list is None:
+    #         plot_list = self.subsystem_list
+
+    #     if time_range is None:
+    #         time_range = self.time_range
+
+    #     # recompute outputs and inputs
+    #     self.reset_signal_counts()
 
 
-        for item in plot_list:
-            subsystem = item['subsystem']
-            states = subsystem.states
-            inputs = subsystem.inputs
-            outputs = subsystem.outputs
+    #     for item in plot_list:
+    #         subsystem = item['subsystem']
+    #         states = subsystem.states
+    #         inputs = subsystem.inputs
+    #         outputs = subsystem.outputs
 
-            # loop through the state trajectory solution
+    #         # loop through the state trajectory solution
             
 
-            # Create a new figure and subplots for each subsystem
-            fig, axs = plt.subplots(3, 1, figsize=(8, 6))
-            fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
+    #         # Create a new figure and subplots for each subsystem
+    #         fig, axs = plt.subplots(3, 1, figsize=(8, 6))
+    #         fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
 
-            # Plot states
-            axs[0].plot(time_range, states.get_values(), label="States")
-            axs[0].set_ylabel("State Values")
-            axs[0].legend()
+    #         # Plot states
+    #         axs[0].plot(time_range, states.get_values(), label="States")
+    #         axs[0].set_ylabel("State Values")
+    #         axs[0].legend()
 
-            # Plot inputs
-            axs[1].plot(time_range, inputs.get_values(), label="Inputs")
-            axs[1].set_ylabel("Input Values")
-            axs[1].legend()
+    #         # Plot inputs
+    #         axs[1].plot(time_range, inputs.get_values(), label="Inputs")
+    #         axs[1].set_ylabel("Input Values")
+    #         axs[1].legend()
 
-            # Plot outputs
-            axs[2].plot(time_range, outputs.get_values(), label="Outputs")
-            axs[2].set_xlabel("Time")
-            axs[2].set_ylabel("Output Values")
-            axs[2].legend()
+    #         # Plot outputs
+    #         axs[2].plot(time_range, outputs.get_values(), label="Outputs")
+    #         axs[2].set_xlabel("Time")
+    #         axs[2].set_ylabel("Output Values")
+    #         axs[2].legend()
 
-            # Show the plot
-            plt.show()
+    #         # Show the plot
+    #         plt.show()
         
