@@ -33,6 +33,8 @@ sol = sim.simulate(t0, tf)
 res = sol['ode_solution']
 time = res.t
 
+sim.plot(gain.outputs['y'], actuator.outputs[0], plant.states[0], plant.states[1])
+
 # import matplotlib.pyplot as plt
 
 # Plotting the outputs
@@ -42,17 +44,17 @@ output3 = res.y[2]  # Extracting the third output
 
 # sim.plot()
 
-plt.figure(figsize=(10, 6))
-plt.plot(time, output1, label='Output 1')
-plt.plot(time, output2, label='Output 2')
-plt.plot(time, output3, label='Output 3')
-plt.xlabel('Time')
-plt.ylabel('Output')
-plt.title('Simulation Outputs')
-plt.legend()
-plt.grid(True)
-plt.show()
+# plt.figure(figsize=(10, 6))
+# plt.plot(time, output1, label='Output 1')
+# plt.plot(time, output2, label='Output 2')
+# plt.plot(time, output3, label='Output 3')
+# plt.xlabel('Time')
+# plt.ylabel('Output')
+# plt.title('Simulation Outputs')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
 
-# # next - do a closed loop system, and try multiple inputs/outputs
-# # name the states as well?
-# save outputs to csv
+# # # next - do a closed loop system, and try multiple inputs/outputs
+# # # name the states as well?
+# # save outputs to csv
