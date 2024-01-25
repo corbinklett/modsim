@@ -293,6 +293,7 @@ class SimulationEngine:
     
     def package_solution(self, ode_solution):
         # TODO: document the sim_solution dictionary
+        # TODO: make a seperate class for handling simulation solutions
         # Collect inputs and outputs from all subsystems. Format just like the solve_ivp solution
 
         self.sim_solution['ode_solution'] = ode_solution
@@ -333,6 +334,17 @@ class SimulationEngine:
                     self.sim_solution['trajectories'][subsystem.name]['outputs'][output_index]['values'][time_index] = subsystem.outputs[output_index].value
                  
         return self.sim_solution
+
+    def get_signal_data(self, subsystem, signal_type: SignalType, signal_index):
+        signal_type = signal_type_mapping.get(signal_type)
+        signal_vector = self.sim_solution['trajectories'][subsystem.name][signal_type][signal_index]['values']
+        signal_unit = self.sim_solution['trajectories'][subsystem.name][signal_type][signal_index]['unit']
+        signal_name = self.sim_solution['trajectories'][subsystem.name][signal_type][signal_index]['name']
+
+        if signal_name == "":
+            signal_name = str(signal_index)
+
+        return signal_vector, signal_unit, signal_name, signal_type
     
     def plot(self, *signals, time_range=None):
         # example use: plot(actuator.outputs[0], plant.states[0], plant.states[1], step.outputs['y'])
@@ -343,42 +355,62 @@ class SimulationEngine:
         time_mask = (time >= time_range[0]) & (time <= time_range[1])
         plot_time = time[time_mask]
 
-        for signal in signals: # TODO: if no args, plot everything
-            signal_type = signal_type_mapping.get(signal.signal_type)
-            signal_vector = self.sim_solution['trajectories'][signal.subsystem.name][signal_type][signal.index]['values']
-            signal_vector = signal_vector[time_mask]
+        if not signals:
+            # Plot everything
             
-            if signal.name == "":
-                signal_name = str(signal.index)
-            else:
-                signal_name = signal.name
+            for item in self.subsystem_list:
+                subsystem = item['subsystem']
 
-            plt.plot(plot_time, signal_vector, label=f"{signal.subsystem.name} {signal_type} {signal_name}")
-            
-        plt.legend()
+                fig, axs = plt.subplots(3, 1, figsize=(8, 6), num=subsystem.name)
+                plt.tight_layout()
+                
+                # inputs plot
+                for input_index, input_signal in enumerate(subsystem.inputs):
+                    plot_data = self.get_signal_data(subsystem, SignalType.INPUT, input_index)
+                    signal_vector = plot_data[0][time_mask]
+                    unit_str = ""
+                    if plot_data[1] != "":
+                        unit_str = f" ({plot_data[1]})"
+
+                    axs[0].plot(plot_time, signal_vector, label=f"{plot_data[2]}{unit_str}")
+                    axs[0].set_xlabel("Time")
+                    axs[0].set_ylabel("Inputs")
+                    axs[0].legend()
+                
+                for state_index, state_signal in enumerate(subsystem.states):
+                    plot_data = self.get_signal_data(subsystem, SignalType.STATE, state_index)
+                    signal_vector = plot_data[0][time_mask]
+                    unit_str = ""
+                    if plot_data[1] != "":
+                        unit_str = f" ({plot_data[1]})"
+
+                    axs[1].plot(plot_time, signal_vector, label=f"{plot_data[2]}{unit_str}")
+                    axs[1].set_xlabel("Time")
+                    axs[1].set_ylabel("States")
+                    axs[1].legend()
+
+                for output_index, output_signal in enumerate(subsystem.outputs):
+                    plot_data = self.get_signal_data(subsystem, SignalType.OUTPUT, output_index)
+                    signal_vector = plot_data[0][time_mask]
+                    unit_str = ""
+                    if plot_data[1] != "":
+                        unit_str = f" ({plot_data[1]})"
+
+                    axs[2].plot(plot_time, signal_vector, label=f"{plot_data[2]}{unit_str}")
+                    axs[2].set_xlabel("Time")
+                    axs[2].set_ylabel("Outputs")
+                    axs[2].legend()
+                       
+        for signal in signals:             
+            plot_data = self.get_signal_data(signal.subsystem, signal.signal_type, signal.index)
+            signal_vector = plot_data[0][time_mask]  
+
+            unit_str = ""
+            if plot_data[1] != "":
+                unit_str = f" ({plot_data[1]})"
+
+            # TODO: autoscale to secondary axis if necessary
+            plt.plot(plot_time, signal_vector, label=f"{signal.subsystem.name}: {plot_data[3][:-1].capitalize()} {plot_data[2]}{unit_str}")
+            plt.legend()
+        
         plt.show()
-        
-
-            # # Create a new figure and subplots for each subsystem
-            # fig, axs = plt.subplots(3, 1, figsize=(8, 6))
-            # fig.suptitle(f"Subsystem: {subsystem.__class__.__name__}")
-
-            # # Plot states
-            # axs[0].plot(time_range, states.get_values(), label="States")
-            # axs[0].set_ylabel("State Values")
-            # axs[0].legend()
-
-            # # Plot inputs
-            # axs[1].plot(time_range, inputs.get_values(), label="Inputs")
-            # axs[1].set_ylabel("Input Values")
-            # axs[1].legend()
-
-            # # Plot outputs
-            # axs[2].plot(time_range, outputs.get_values(), label="Outputs")
-            # axs[2].set_xlabel("Time")
-            # axs[2].set_ylabel("Output Values")
-            # axs[2].legend()
-
-            # # Show the plot
-            # plt.show()
-        

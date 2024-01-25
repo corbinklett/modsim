@@ -17,7 +17,7 @@ sim.add_subsystem(gain)
 sim.add_subsystem(step)
 sim.add_subsystem(plant, [0, 1])
 
-gain.outputs.names_units("y")
+gain.outputs.names_units("y", "mA")
 actuator.inputs.names_units("u", "V")
 
 # output -> input
@@ -33,14 +33,14 @@ sol = sim.simulate(t0, tf)
 res = sol['ode_solution']
 time = res.t
 
-sim.plot(gain.outputs['y'], actuator.outputs[0], plant.states[0], plant.states[1])
-
+#sim.plot(gain.outputs['y'], actuator.outputs[0], plant.states[0], plant.states[1])
+sim.plot()
 # import matplotlib.pyplot as plt
 
 # Plotting the outputs
-output1 = res.y[0]  # Extracting the first output
-output2 = res.y[1]  # Extracting the second output
-output3 = res.y[2]  # Extracting the third output
+# output1 = res.y[0]  # Extracting the first output
+# output2 = res.y[1]  # Extracting the second output
+# output3 = res.y[2]  # Extracting the third output
 
 # sim.plot()
 
