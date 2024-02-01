@@ -2,12 +2,12 @@ from .main import Subsystem
 import numpy as np
 
 class LinearSystem(Subsystem):
-    def __init__(self, A, B, C, D=None):
+    def __init__(self, A, B, C, D=None, name='Linear System'):
         # TODO: enforce input requirements. Technically, any of the inputs could be None.
         parameters = {'A': A, 'B': B, 'C': C}
         if D is None:
             parameters['D'] = np.zeros((C.shape[0], B.shape[1]))
-        super().__init__(A.shape[0], B.shape[1], C.shape[0], parameters)
+        super().__init__(A.shape[0], B.shape[1], C.shape[0], parameters, name=name)
         # optionally, name signals here
 
     def calc_outputs(self, x, time):
@@ -27,9 +27,9 @@ class LinearSystem(Subsystem):
 
 class Actuator(Subsystem):
 
-    def __init__(self, time_constant):
+    def __init__(self, time_constant, name='Actuator'):
         parameters = {'time constant': time_constant}
-        super().__init__(1, 1, 1, parameters)
+        super().__init__(1, 1, 1, parameters, name=name)
 
     def calc_outputs(self, x, time):
         return x
@@ -39,8 +39,8 @@ class Actuator(Subsystem):
         return 1/self.parameters['time constant'] * (u - x)
 
 class StepInput(Subsystem):
-    def __init__(self):
-        super().__init__(0, 0, 1)
+    def __init__(self, name='Step Input'):
+        super().__init__(0, 0, 1, name=name)
 
     def calc_outputs(self, u, time):
         return 1.0
@@ -49,9 +49,9 @@ class StepInput(Subsystem):
         pass
 
 class Gain(Subsystem):
-    def __init__(self, k):
+    def __init__(self, k, name='Gain'):
         parameters = {'k': k}
-        super().__init__(0, 1, 1, parameters)
+        super().__init__(0, 1, 1, parameters, name=name)
 
     def calc_outputs(self, u, time):
         return self.parameters['k'] * u
