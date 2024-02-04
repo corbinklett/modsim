@@ -1,10 +1,15 @@
 import modsim as ms
 import numpy as np
-import matplotlib.pyplot as plt
+
+# Use the modsim package to create a simple open loop system
 
 # Example usage
-actuator = ms.Actuator(.5)
-A = np.array([[0, 1], [-.2, -1]])
+time_constant = 0.5
+actuator = ms.Actuator(time_constant)
+
+k_spring = 1
+k_damp = .2
+A = np.array([[0, 1], [-k_damp, -k_spring]])
 B = np.array([[0], [1]])
 C = np.array([[1, 0]])
 plant = ms.LinearSystem(A, B, C)
@@ -15,10 +20,13 @@ sim = ms.SimulationEngine()
 sim.add_subsystem(actuator)
 sim.add_subsystem(gain)
 sim.add_subsystem(step)
-sim.add_subsystem(plant, [0, 1])
+sim.add_subsystem(plant, [0, 1]) # TODO: change to x0 keyword argument
 
-gain.outputs.names_units("y", "mA")
-actuator.inputs.names_units("u", "V")
+gain.outputs.names_units("y")
+actuator.inputs.names_units("u", "meters")
+actuator.outputs.names_units("y", "Newtons")
+plant.inputs.names_units("u", "Newtons")
+plant.states.names_units(["x1", "x2"], ["meters", "m/s"])
 
 # output -> input
 sim.connect(gain.outputs["y"], actuator.inputs["u"])
