@@ -28,10 +28,3 @@ plt.ylabel('Output')
 plt.title('Step Response')
 plt.grid(True)
 plt.show()
-
-
-
-# Define the input
-t = [0, 5]
-u = [0, 0]
-
